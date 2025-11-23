@@ -7,7 +7,6 @@ services:
       - "3000:3000"
     volumes:
       - ./public/uploads:/app/public/uploads
-      - ./vuln_shop.db:/app/vuln_shop.db
     environment:
       - NODE_ENV=production
       - SECURITY_LEVEL=v1 # Change to v2 or v3 to increase security
