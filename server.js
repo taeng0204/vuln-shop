@@ -22,6 +22,7 @@ app.use((req, res, next) => {
     req.securityLevel = envLevel;
     res.locals.securityLevel = envLevel;
     res.locals.user = req.cookies.user;
+    res.locals.baseUrl = `${req.protocol}://${req.get('host')}`;
     next();
 });
 
