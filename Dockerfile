@@ -8,8 +8,11 @@ RUN npm install
 
 COPY . .
 
-# Create uploads directory
-RUN mkdir -p public/uploads
+# Create uploads directory and set permissions
+RUN mkdir -p public/uploads && chown -R node:node /app
+
+# Switch to non-root user
+USER node
 
 EXPOSE 3000
 
