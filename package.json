@@ -1,0 +1,20 @@
+{
+  "name": "vuln-shop",
+  "version": "1.0.0",
+  "description": "**생성형 AI를 활용한 공격 로그 분석 서비스**’를 제안하고자 합니다. 오늘은 **왜 이 과제가 필요한지**, 저희가 어떤 방식으로 **프로젝트를 진행**할지, 그리고 **기대효과**는 무엇인지 말씀드리겠습니다.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "cookie-parser": "^1.4.7",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "sqlite3": "^5.1.7"
+  }
+}

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VULN SHOP</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+    <header>
+        <a href="/" class="logo">VULN SHOP</a>
+
+        <nav>
+            <a href="/">Shop</a>
+            <a href="/board">Q&A</a>
+            <% if (user) { %>
+                <a href="/profile">Profile</a>
+                <a href="/order">Orders</a>
+                <a href="/logout">Logout</a>
+                <% } else { %>
+                    <a href="/login">Login</a>
+                    <a href="/signup">Join</a>
+                    <% } %>
+        </nav>
+
+        <div class="security-toggle">
+            <span>SEC:</span>
+            <span style="font-weight: 800; padding: 2px 8px; background-color: #000; color: #fff; border-radius: 10px;">
+                <%= securityLevel %>
+            </span>
+        </div>
+    </header>
+    <div class="container">
