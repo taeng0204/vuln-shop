@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const logger = require('./logger');
 
 const app = express();
 const port = 3000;
@@ -25,6 +26,52 @@ app.use((req, res, next) => {
     res.locals.baseUrl = `${req.protocol}://${req.get('host')}`;
     next();
 });
+
+// Logging Middleware
+app.use((req, res, next) => {
+    const start = Date.now();
+
+    // Capture response status on finish
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+
+        // Calculate statistical features
+        const numHeaders = Object.keys(req.headers).length;
+        const numQueryParams = Object.keys(req.query).length;
+        const numBodyKeys = req.body ? Object.keys(req.body).length : 0;
+        const contentLen = req.get('content-length') ? parseInt(req.get('content-length')) : 0;
+        const responseSize = res.get('content-length') ? parseInt(res.get('content-length')) : 0;
+
+        const logData = {
+            timestamp: new Date().toISOString(),
+            ip: req.ip,
+            method: req.method,
+            url: req.originalUrl,
+            headers: req.headers,
+            query: req.query,
+            body: req.body, // Important for capturing attack payloads
+            response_status: res.statusCode,
+            duration_ms: duration,
+            user: req.cookies.user || 'anonymous',
+            security_level: req.securityLevel,
+
+            // Enhanced Features for NIDS/AI
+            response_size: responseSize,
+            referrer: req.get('referer') || '',
+            user_agent: req.get('user-agent') || '',
+            num_headers: numHeaders,
+            num_query_params: numQueryParams,
+            num_body_keys: numBodyKeys,
+            request_content_length: contentLen
+        };
+
+        logger.info('Traffic Log', logData);
+    });
+
+    next();
+});
+
+
 
 // Database Setup
 const db = new sqlite3.Database('vuln_shop.db');
