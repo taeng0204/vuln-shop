@@ -35,3 +35,10 @@ yarn-error.log*
 # Optional: Uploads (if you want to keep the folder but ignore content)
 public/uploads/*
 !public/uploads/.gitkeep
+
+# Generated Data
+logs/
+pcap/
+csv/
+*.pcap
+*.csv

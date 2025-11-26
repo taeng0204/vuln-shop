@@ -11,3 +11,28 @@ services:
     environment:
       - NODE_ENV=production
       - SECURITY_LEVEL=v1 # Change to v2 or v3 to increase security
+    networks:
+      - vuln-net
+
+  packet-sniffer:
+    image: nicolaka/netshoot
+    container_name: packet-sniffer
+    network_mode: service:web # Assuming 'vuln-shop' refers to the 'web' service
+    volumes:
+      - ./pcap:/data
+    command: tcpdump -i eth0 -w /data/traffic-%Y-%m-%d-%H-%M-%S.pcap -G 3600
+    restart: always
+
+  pcap-processor:
+    build: ./pcap_processor
+    container_name: pcap-processor
+    volumes:
+      - ./pcap:/data/pcap:ro
+      - ./csv:/data/csv
+    depends_on:
+      - packet-sniffer
+    restart: always
+
+networks:
+  vuln-net:
+    driver: bridge

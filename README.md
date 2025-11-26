@@ -62,6 +62,17 @@ node server.js
 node verify_attacks_v2.js
 ```
 
+## 📡 Network Packet Capture (NIDS Data)
+To generate a dataset compatible with traditional NIDS (like CICIDS2018), a sidecar container (`packet-sniffer`) captures all network traffic to `.pcap` files.
+
+- **Location:** `pcap/` directory.
+- **Format:** Standard PCAP (readable by Wireshark, tcpdump, CICFlowMeter).
+- **Rotation:** Files are rotated every hour (`traffic-YYYY-MM-DD-HH-MM.pcap`).
+
+**How to use:**
+1.  **Analyze with Wireshark:** Open the `.pcap` file to see full packet details (Flags, Payload, etc.).
+2.  **Convert to CSV:** Use tools like **CICFlowMeter** to extract features (Flow Duration, Total Fwd Packets, etc.) for AI training.
+
 ## 📂 프로젝트 구조
 
 ```
