@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
@@ -22,7 +23,9 @@ app.use((req, res, next) => {
     const envLevel = process.env.SECURITY_LEVEL || 'v1';
     req.securityLevel = envLevel;
     res.locals.securityLevel = envLevel;
+    res.locals.securityLevel = envLevel;
     res.locals.user = req.cookies.user;
+    res.locals.isAdmin = req.cookies.isAdmin === 'true';
     res.locals.baseUrl = `${req.protocol}://${req.get('host')}`;
     next();
 });
@@ -98,9 +101,36 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    db.run(`CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        price REAL,
+        image TEXT,
+        description TEXT
+    )`);
+
     // Seed Data
     db.run(`INSERT OR IGNORE INTO users (username, password) VALUES ('admin', 'admin123')`);
     db.run(`INSERT OR IGNORE INTO users (username, password) VALUES ('guest', 'guest123')`);
+
+    // Seed Products
+    db.get("SELECT count(*) as count FROM products", (err, row) => {
+        if (row.count === 0) {
+            const products = [
+                { name: 'OVERSIZED HOODIE', price: 120.00, image: '/images/oversized-hoodie.jpg', description: 'Heavyweight cotton fleece.' },
+                { name: 'VINTAGE TEE', price: 45.00, image: '/images/vintage-tee.jpg', description: 'Washed black with distressed details.' },
+                { name: 'CARGO PANTS', price: 95.00, image: '/images/cargo-pants.jpg', description: 'Multi-pocket functionality.' },
+                { name: 'TACTICAL VEST', price: 150.00, image: '/images/tactical-vest.jpg', description: 'Utility focused design.' },
+                { name: 'DENIM JACKET', price: 180.00, image: '/images/denim-jacket.jpg', description: 'Classic cut with modern wash.' },
+                { name: 'BEANIE', price: 35.00, image: '/images/beanie.jpg', description: 'Ribbed knit essential.' }
+            ];
+            const stmt = db.prepare("INSERT INTO products (name, price, image, description) VALUES (?, ?, ?, ?)");
+            products.forEach(p => {
+                stmt.run(p.name, p.price, p.image, p.description);
+            });
+            stmt.finalize();
+        }
+    });
 
     // Seed Orders
     db.get("SELECT count(*) as count FROM orders", (err, row) => {
@@ -151,8 +181,11 @@ const upload = multer({
 // Routes
 
 // Home
+// Home
 app.get('/', (req, res) => {
-    res.render('index');
+    db.all("SELECT * FROM products", (err, rows) => {
+        res.render('index', { products: rows });
+    });
 });
 
 // Login Page
@@ -164,6 +197,14 @@ app.get('/login', (req, res) => {
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
     const level = req.securityLevel;
+
+    // Check for Admin from .env
+    if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+        res.cookie('user', username);
+        res.cookie('isAdmin', 'true');
+        res.cookie('user_id', 0); // Admin ID
+        return res.redirect('/');
+    }
 
     console.log(`[${level}] Login Attempt: ${username}`);
 
@@ -198,6 +239,7 @@ function handleLogin(err, row, res) {
     }
     if (row) {
         res.cookie('user', row.username);
+        res.cookie('isAdmin', 'false');
         res.cookie('user_id', row.id); // Needed for IDOR check
         return res.redirect('/');
     } else {
@@ -223,6 +265,7 @@ app.post('/signup', (req, res) => {
 // Logout
 app.get('/logout', (req, res) => {
     res.clearCookie('user');
+    res.clearCookie('isAdmin');
     res.clearCookie('user_id');
     res.redirect('/');
 });
@@ -254,8 +297,18 @@ app.post('/board', (req, res) => {
 // Profile (File Upload)
 app.get('/profile', (req, res) => {
     if (!req.cookies.user) return res.redirect('/login');
+    console.log("Profile request for user:", req.cookies.user);
 
     db.get("SELECT * FROM users WHERE username = ?", [req.cookies.user], (err, row) => {
+        if (err) {
+            console.error("DB Error in profile:", err);
+            return res.status(500).send("DB Error");
+        }
+        if (!row) {
+            console.error("User not found in DB:", req.cookies.user);
+            // If admin is not in DB, we might want to handle it gracefully or just error
+            return res.status(500).send("User not found in DB");
+        }
         res.render('profile', { user: row, msg: null });
     });
 });
@@ -312,6 +365,46 @@ app.get('/order', (req, res) => {
         if (err) return res.status(500).send("DB Error");
         if (!row) return res.status(404).send("Order not found or access denied");
         res.render('order_detail', { order: row });
+    });
+});
+
+// Admin Routes
+function isAdmin(req, res, next) {
+    if (req.cookies.isAdmin === 'true') {
+        next();
+    } else {
+        res.status(403).send("Access Denied");
+    }
+}
+
+app.get('/admin/products', isAdmin, (req, res) => {
+    db.all("SELECT * FROM products", (err, rows) => {
+        res.render('admin_products', { products: rows });
+    });
+});
+
+app.post('/admin/products/:id', isAdmin, (req, res) => {
+    const { name, price, description } = req.body;
+    db.run("UPDATE products SET name = ?, price = ?, description = ? WHERE id = ?", [name, price, description, req.params.id], (err) => {
+        res.redirect('/admin/products');
+    });
+});
+
+app.post('/admin/posts/:id/delete', isAdmin, (req, res) => {
+    db.run("DELETE FROM posts WHERE id = ?", [req.params.id], (err) => {
+        res.redirect('/board');
+    });
+});
+
+app.get('/admin/users', isAdmin, (req, res) => {
+    db.all("SELECT * FROM users", (err, rows) => {
+        res.render('admin_users', { users: rows });
+    });
+});
+
+app.post('/admin/users/:id/delete', isAdmin, (req, res) => {
+    db.run("DELETE FROM users WHERE id = ?", [req.params.id], (err) => {
+        res.redirect('/admin/users');
     });
 });
 

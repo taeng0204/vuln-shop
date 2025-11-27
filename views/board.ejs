@@ -28,6 +28,12 @@
                     </div>
                     <div class="post-meta">
                         <%= post.created_at %>
+                            <% if (isAdmin) { %>
+                                <form action="/admin/posts/<%= post.id %>/delete" method="POST" style="display:inline;">
+                                    <button type="submit"
+                                        style="background:red; color:white; border:none; padding:2px 5px; cursor:pointer;">Delete</button>
+                                </form>
+                                <% } %>
                     </div>
                 </div>
                 <% }); %>

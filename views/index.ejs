@@ -5,60 +5,17 @@
     </div>
 
     <div class="product-grid">
+        <% products.forEach(function(product) { %>
         <div class="product-card">
             <div class="product-image">
-                <img src="/images/oversized-hoodie.jpg" alt="Oversized Hoodie">
+                <img src="<%= product.image %>" alt="<%= product.name %>">
             </div>
             <div class="product-info">
-                <h3>OVERSIZED HOODIE</h3>
-                <p>$120.00</p>
+                <h3><%= product.name %></h3>
+                <p>$<%= product.price.toFixed(2) %></p>
             </div>
         </div>
-        <div class="product-card">
-            <div class="product-image">
-                <img src="/images/vintage-tee.jpg" alt="Vintage Tee">
-            </div>
-            <div class="product-info">
-                <h3>VINTAGE TEE</h3>
-                <p>$45.00</p>
-            </div>
-        </div>
-        <div class="product-card">
-            <div class="product-image">
-                <img src="/images/cargo-pants.jpg" alt="Cargo Pants">
-            </div>
-            <div class="product-info">
-                <h3>CARGO PANTS</h3>
-                <p>$95.00</p>
-            </div>
-        </div>
-        <div class="product-card">
-            <div class="product-image">
-                <img src="/images/tactical-vest.jpg" alt="Tactical Vest">
-            </div>
-            <div class="product-info">
-                <h3>TACTICAL VEST</h3>
-                <p>$150.00</p>
-            </div>
-        </div>
-        <div class="product-card">
-            <div class="product-image">
-                <img src="/images/denim-jacket.jpg" alt="Denim Jacket">
-            </div>
-            <div class="product-info">
-                <h3>DENIM JACKET</h3>
-                <p>$180.00</p>
-            </div>
-        </div>
-        <div class="product-card">
-            <div class="product-image">
-                <img src="/images/beanie.jpg" alt="Beanie">
-            </div>
-            <div class="product-info">
-                <h3>BEANIE</h3>
-                <p>$35.00</p>
-            </div>
-        </div>
+        <% }); %>
     </div>
 
     <%- include('footer') %>
