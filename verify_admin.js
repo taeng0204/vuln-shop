@@ -10,7 +10,7 @@ function loginAsAdmin(callback) {
 
     const options = {
         hostname: 'localhost',
-        port: 3000,
+        port: process.env.PORT || 3000,
         path: '/login',
         method: 'POST',
         headers: {
@@ -38,7 +38,7 @@ function verifyAdminAccess(cookies) {
     console.log("\nVerifying Admin Access to /admin/products...");
     const options = {
         hostname: 'localhost',
-        port: 3000,
+        port: process.env.PORT || 3000,
         path: '/admin/products',
         method: 'GET',
         headers: {
@@ -68,7 +68,7 @@ function verifyProfileAccess(cookies) {
     console.log("\nVerifying Admin Profile Access...");
     const options = {
         hostname: 'localhost',
-        port: 3000,
+        port: process.env.PORT || 3000,
         path: '/profile',
         method: 'GET',
         headers: {

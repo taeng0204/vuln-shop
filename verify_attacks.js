@@ -10,7 +10,7 @@ function testSQLInjection() {
 
     const options = {
         hostname: 'localhost',
-        port: 3000,
+        port: process.env.PORT || 3000,
         path: '/login',
         method: 'POST',
         headers: {
@@ -45,7 +45,7 @@ function testXSS() {
 
     const postOptions = {
         hostname: 'localhost',
-        port: 3000,
+        port: process.env.PORT || 3000,
         path: '/board',
         method: 'POST',
         headers: {
@@ -57,7 +57,8 @@ function testXSS() {
     const req = http.request(postOptions, (res) => {
         console.log(`XSS Post Status Code: ${res.statusCode}`);
         // Now fetch the board to see if the payload is there
-        http.get('http://localhost:3000/board', (res) => {
+        const port = process.env.PORT || 3000;
+        http.get(`http://localhost:${port}/board`, (res) => {
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
             res.on('end', () => {

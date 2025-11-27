@@ -12,7 +12,7 @@ COPY . .
 RUN mkdir -p public/uploads logs && chown -R node:node /app
 
 # Switch to non-root user
-USER node
+# USER node
 
 EXPOSE 3000
 
