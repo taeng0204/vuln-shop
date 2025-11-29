@@ -1,27 +1,111 @@
 import os
 import time
+import csv
 import subprocess
 from pathlib import Path
+from collections import defaultdict
+from scapy.all import rdpcap, IP, TCP, UDP
 
 PCAP_DIR = Path('/data/pcap')
 CSV_DIR = Path('/data/csv')
 MAX_PENDING_FILES = 50 # Maximum number of pcap files to keep in queue
 
 
+def get_flow_key(pkt):
+    if IP in pkt:
+        src = pkt[IP].src
+        dst = pkt[IP].dst
+        proto = pkt[IP].proto
+        sport = 0
+        dport = 0
+        if TCP in pkt:
+            sport = pkt[TCP].sport
+            dport = pkt[TCP].dport
+        elif UDP in pkt:
+            sport = pkt[UDP].sport
+            dport = pkt[UDP].dport
+        
+        # Canonical key (sorted) to group bidirectional flows
+        key = tuple(sorted([(src, sport), (dst, dport)]) + [proto])
+        return key
+    return None
+
+def process_pcap(input_file, output_file):
+    print(f"Reading {input_file}...")
+    try:
+        packets = rdpcap(str(input_file))
+    except Exception as e:
+        print(f"Error reading pcap: {e}")
+        return
+
+    flows = defaultdict(lambda: {
+        'start_time': float('inf'),
+        'end_time': 0,
+        'src_ip': '',
+        'dst_ip': '',
+        'src_port': 0,
+        'dst_port': 0,
+        'protocol': 0,
+        'total_packets': 0,
+        'total_bytes': 0
+    })
+
+    print(f"Processing {len(packets)} packets...")
+    for pkt in packets:
+        if IP not in pkt:
+            continue
+            
+        key = get_flow_key(pkt)
+        if not key:
+            continue
+            
+        flow = flows[key]
+        
+        # Initialize flow info from first packet
+        if flow['total_packets'] == 0:
+            flow['src_ip'] = pkt[IP].src
+            flow['dst_ip'] = pkt[IP].dst
+            flow['protocol'] = pkt[IP].proto
+            if TCP in pkt:
+                flow['src_port'] = pkt[TCP].sport
+                flow['dst_port'] = pkt[TCP].dport
+            elif UDP in pkt:
+                flow['src_port'] = pkt[UDP].sport
+                flow['dst_port'] = pkt[UDP].dport
+        
+        # Update stats
+        flow['start_time'] = min(flow['start_time'], float(pkt.time))
+        flow['end_time'] = max(flow['end_time'], float(pkt.time))
+        flow['total_packets'] += 1
+        flow['total_bytes'] += len(pkt)
+
+    print(f"Found {len(flows)} flows. Writing to {output_file}...")
+    
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['src_ip', 'dst_ip', 'src_port', 'dst_port', 'protocol', 'duration', 'total_packets', 'total_bytes'])
+        
+        for flow in flows.values():
+            duration = flow['end_time'] - flow['start_time']
+            writer.writerow([
+                flow['src_ip'],
+                flow['dst_ip'],
+                flow['src_port'],
+                flow['dst_port'],
+                flow['protocol'],
+                f"{duration:.6f}",
+                flow['total_packets'],
+                flow['total_bytes']
+            ])
+
 def convert_pcap_to_csv(pcap_file):
     try:
         print(f"Processing {pcap_file}...")
-        # cicflowmeter -f <pcap_file> -c <csv_dir>
-        # It seems cicflowmeter tries to write to the path specified by -c.
-        # If -c is a directory, it fails. Let's specify the full output path.
         csv_filename = pcap_file.stem + '.csv'
         csv_output_path = CSV_DIR / csv_filename
         
-        # Note: cicflowmeter might append .csv automatically or behave differently.
-        # Let's try passing the directory again but ensure we are using it right.
-        # If the error is "Is a directory", it means it tried to open the path we gave it.
-        # So we should give it the full file path.
-        subprocess.run(['cicflowmeter', '-f', str(pcap_file), '-c', str(csv_output_path)], check=True)
+        # Use internal function instead of subprocess
+        process_pcap(pcap_file, csv_output_path)
         print(f"Successfully converted {pcap_file} to CSV.")
         
         # Auto-delete processed pcap file to save space
@@ -30,10 +114,8 @@ def convert_pcap_to_csv(pcap_file):
             print(f"Deleted processed file: {pcap_file}")
         except Exception as e:
             print(f"Failed to delete {pcap_file}: {e}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error converting {pcap_file}: {e}")
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Error converting {pcap_file}: {e}")
 
 def main():
     print("Starting PCAP Processor...")
@@ -42,9 +124,6 @@ def main():
     CSV_DIR.mkdir(parents=True, exist_ok=True)
     
     processed_files = set()
-    
-    # Initial scan to mark existing files as processed (optional, or process them)
-    # For now, let's process everything that doesn't have a corresponding CSV
     
     while True:
         try:
@@ -58,19 +137,14 @@ def main():
                     
                     if not csv_file.exists() and pcap_file not in processed_files:
                         # Check if file is being written to (modified in last 10 seconds)
-                        # This prevents reading incomplete pcap files
                         if time.time() - pcap_file.stat().st_mtime < 10:
                             continue
                             
-                        # Wait a bit to ensure file write is complete (simple heuristic)
-                        # A better way would be to check file modification time or use inotify
-                        # time.sleep(1) 
                         convert_pcap_to_csv(pcap_file)
                         processed_files.add(pcap_file)
             
             time.sleep(10) # Check every 10 seconds
             
-
         except Exception as e:
             print(f"Error in main loop: {e}")
             time.sleep(10)
