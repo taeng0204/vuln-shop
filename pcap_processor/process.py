@@ -47,7 +47,10 @@ def process_pcap(input_file, output_file):
         'dst_port': 0,
         'protocol': 0,
         'total_packets': 0,
-        'total_bytes': 0
+        'total_bytes': 0,
+        # NSL-KDD compatible features
+        'src_bytes': 0,  # bytes from src to dst
+        'dst_bytes': 0,  # bytes from dst to src
     })
 
     print(f"Processing {len(packets)} packets...")
@@ -78,24 +81,57 @@ def process_pcap(input_file, output_file):
         flow['end_time'] = max(flow['end_time'], float(pkt.time))
         flow['total_packets'] += 1
         flow['total_bytes'] += len(pkt)
+        
+        # Track directional bytes (NSL-KDD: src_bytes, dst_bytes)
+        if pkt[IP].src == flow['src_ip']:
+            flow['src_bytes'] += len(pkt)
+        else:
+            flow['dst_bytes'] += len(pkt)
 
     print(f"Found {len(flows)} flows. Writing to {output_file}...")
     
+    # Protocol number to name mapping (NSL-KDD compatible)
+    proto_map = {6: 'tcp', 17: 'udp', 1: 'icmp'}
+    
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['src_ip', 'dst_ip', 'src_port', 'dst_port', 'protocol', 'duration', 'total_packets', 'total_bytes'])
+        writer.writerow([
+            'src_ip', 'dst_ip', 'src_port', 'dst_port', 
+            'protocol', 'protocol_type',  # NSL-KDD: protocol_type
+            'start_time', 'end_time', 'duration', 
+            'total_packets', 'total_bytes',
+            'src_bytes', 'dst_bytes',  # NSL-KDD: src_bytes, dst_bytes
+            'land'  # NSL-KDD: land (src_ip == dst_ip)
+        ])
         
         for flow in flows.values():
             duration = flow['end_time'] - flow['start_time']
+            # Convert timestamps to ISO format for easier correlation
+            from datetime import datetime
+            start_iso = datetime.fromtimestamp(flow['start_time']).isoformat() if flow['start_time'] != float('inf') else ''
+            end_iso = datetime.fromtimestamp(flow['end_time']).isoformat() if flow['end_time'] != 0 else ''
+            
+            # NSL-KDD: protocol_type (tcp/udp/icmp)
+            protocol_type = proto_map.get(flow['protocol'], 'other')
+            
+            # NSL-KDD: land (1 if src_ip == dst_ip, else 0)
+            land = 1 if flow['src_ip'] == flow['dst_ip'] else 0
+            
             writer.writerow([
                 flow['src_ip'],
                 flow['dst_ip'],
                 flow['src_port'],
                 flow['dst_port'],
                 flow['protocol'],
+                protocol_type,
+                start_iso,
+                end_iso,
                 f"{duration:.6f}",
                 flow['total_packets'],
-                flow['total_bytes']
+                flow['total_bytes'],
+                flow['src_bytes'],
+                flow['dst_bytes'],
+                land
             ])
 
 def convert_pcap_to_csv(pcap_file):

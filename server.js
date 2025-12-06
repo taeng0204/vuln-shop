@@ -6,12 +6,14 @@ const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const logger = require('./logger');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
+app.set('trust proxy', true);  // Trust X-Forwarded-For header for IP detection
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static('public'));
@@ -34,6 +36,13 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
     const start = Date.now();
 
+    // Generate unique request ID for correlation
+    const requestId = crypto.randomUUID();
+    req.requestId = requestId;
+
+    // Set X-Request-ID header for packet-level matching
+    res.setHeader('X-Request-ID', requestId);
+
     // Capture response status on finish
     res.on('finish', () => {
         const duration = Date.now() - start;
@@ -45,9 +54,14 @@ app.use((req, res, next) => {
         const contentLen = req.get('content-length') ? parseInt(req.get('content-length')) : 0;
         const responseSize = res.get('content-length') ? parseInt(res.get('content-length')) : 0;
 
+        // Get client port for L3/L4 correlation
+        const srcPort = req.socket ? req.socket.remotePort : 0;
+
         const logData = {
             timestamp: new Date().toISOString(),
+            request_id: requestId,
             ip: req.ip,
+            src_port: srcPort,
             method: req.method,
             url: req.originalUrl,
             headers: req.headers,
