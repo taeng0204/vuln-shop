@@ -289,8 +289,8 @@ class UserAgent:
             self.visit_signup_page,
         ]
         
-        # Random number of page views
-        for _ in range(random.randint(2, 8)):
+        # Random number of page views (massively increased for high traffic)
+        for _ in range(random.randint(50, 100)):
             action = random.choice(actions)
             action()
             self.wait()
@@ -317,7 +317,7 @@ class UserAgent:
                     self.view_profile,
                 ]
                 
-                for _ in range(random.randint(3, 7)):
+                for _ in range(random.randint(50, 120)):
                     action = random.choice(actions)
                     action()
                     self.wait()
@@ -347,7 +347,7 @@ class UserAgent:
                 self.username = existing['username']
                 
                 # Do some activities
-                for _ in range(random.randint(2, 5)):
+                for _ in range(random.randint(40, 80)):
                     action = random.choice([self.browse_home, self.browse_board, self.view_orders])
                     action()
                     self.wait()
@@ -370,8 +370,8 @@ class UserAgent:
             if self.login():
                 self.wait()
                 
-                # Heavy activity
-                for _ in range(random.randint(5, 15)):
+                # Heavy activity (massively increased for high traffic)
+                for _ in range(random.randint(80, 200)):
                     weights = [0.2, 0.3, 0.3, 0.15, 0.05]
                     actions = [
                         self.browse_home,
@@ -403,7 +403,7 @@ class UserAgent:
             self.username = existing['username']
             
             # Focus on orders
-            for _ in range(random.randint(2, 5)):
+            for _ in range(random.randint(40, 80)):
                 self.view_orders()
                 self.wait()
             

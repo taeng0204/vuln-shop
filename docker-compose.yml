@@ -21,7 +21,7 @@ services:
     network_mode: service:web # Assuming 'vuln-shop' refers to the 'web' service
     volumes:
       - ./pcap:/data
-    command: tcpdump -i eth0 -w /data/traffic-%Y-%m-%d-%H-%M-%S.pcap -G 3600
+    command: tcpdump -i eth0 -w /data/traffic-%Y-%m-%d-%H-%M-%S.pcap -G 300
     restart: always
 
   pcap-processor:

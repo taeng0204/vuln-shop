@@ -10,6 +10,7 @@ It also labels traffic as 'attack' or 'normal' based on source IP.
 import os
 import json
 import csv
+import gzip
 import argparse
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -21,22 +22,59 @@ CSV_DIR = Path('./csv')
 OUTPUT_DIR = Path('./output')
 
 
-def load_l7_logs(logs_dir: Path) -> list:
-    """Load L7 application logs from JSON log files."""
+def load_l7_logs(logs_dir: Path, after_time: datetime = None) -> list:
+    """Load L7 application logs from JSON log files (including .gz and rotated files).
+    
+    Args:
+        logs_dir: Directory containing log files
+        after_time: Optional datetime to filter logs (only include logs after this time)
+    """
     l7_logs = []
     
-    for log_file in sorted(logs_dir.glob('traffic-*.log')):
-        print(f"Loading L7 log: {log_file}")
-        with open(log_file, 'r') as f:
-            for line in f:
-                try:
-                    log_entry = json.loads(line.strip())
-                    if 'message' in log_entry and log_entry.get('message') == 'Traffic Log':
-                        l7_logs.append(log_entry)
-                except json.JSONDecodeError:
-                    continue
+    # Find all log files: .log, .log.gz, .log.1, .log.2, etc.
+    log_files = []
+    for pattern in ['traffic-*.log', 'traffic-*.log.gz', 'traffic-*.log.[0-9]*']:
+        log_files.extend(logs_dir.glob(pattern))
     
-    print(f"Loaded {len(l7_logs)} L7 log entries")
+    # Remove duplicates and sort
+    log_files = sorted(set(log_files))
+    
+    print(f"Found {len(log_files)} log files to process")
+    
+    for log_file in log_files:
+        print(f"Loading L7 log: {log_file}")
+        try:
+            # Handle gzip files
+            if str(log_file).endswith('.gz'):
+                opener = lambda f: gzip.open(f, 'rt', encoding='utf-8')
+            else:
+                opener = lambda f: open(f, 'r', encoding='utf-8')
+            
+            with opener(log_file) as f:
+                line_count = 0
+                filtered_count = 0
+                for line in f:
+                    try:
+                        log_entry = json.loads(line.strip())
+                        if 'message' in log_entry and log_entry.get('message') == 'Traffic Log':
+                            # Apply time filter if specified
+                            if after_time:
+                                log_time = parse_timestamp(log_entry.get('timestamp', ''))
+                                if log_time and log_time <= after_time:
+                                    filtered_count += 1
+                                    continue
+                            l7_logs.append(log_entry)
+                            line_count += 1
+                    except json.JSONDecodeError:
+                        continue
+                if after_time and filtered_count > 0:
+                    print(f"  -> Loaded {line_count} entries (filtered out {filtered_count} before cutoff)")
+                else:
+                    print(f"  -> Loaded {line_count} entries from {log_file.name}")
+        except Exception as e:
+            print(f"  -> Error reading {log_file}: {e}")
+    
+    print(f"Total loaded: {len(l7_logs)} L7 log entries")
     return l7_logs
 
 
@@ -80,32 +118,41 @@ def extract_ip(ip_str: str) -> str:
 
 
 def build_flow_index(l3l4_logs: list) -> dict:
-    """Build index of L3/4 flows by (src_ip, src_port) for quick lookup."""
+    """Build index of L3/4 flows by src_port for quick lookup.
+    
+    Note: We index by src_port only (not src_ip) because Docker networking
+    causes IP address differences between L7 logs (container internal IP)
+    and L4 pcap captures (host/bridge IP). The src_port remains consistent.
+    """
     index = defaultdict(list)
     
     for flow in l3l4_logs:
-        src_ip = flow.get('src_ip', '')
         src_port = flow.get('src_port', '')
-        dst_ip = flow.get('dst_ip', '')
         dst_port = flow.get('dst_port', '')
         
-        # Index by both directions since flow might be recorded either way
-        index[(src_ip, src_port)].append(flow)
-        index[(dst_ip, dst_port)].append(flow)
+        # Index by port only since Docker networking causes IP mismatches
+        if src_port:
+            index[src_port].append(flow)
+        if dst_port:
+            index[dst_port].append(flow)
     
     return index
 
 
 def find_matching_flow(l7_log: dict, flow_index: dict, time_tolerance_ms: int = 5000) -> dict:
-    """Find L3/4 flow matching the L7 log entry."""
-    src_ip = extract_ip(l7_log.get('ip', ''))
+    """Find L3/4 flow matching the L7 log entry by src_port and timestamp.
+    
+    Note: Matching is done by src_port only (ignoring IP) because Docker
+    networking causes different IPs between L7 app logs and L4 pcap captures.
+    """
     src_port = str(l7_log.get('src_port', ''))
     l7_time = parse_timestamp(l7_log.get('timestamp', ''))
     
-    if not l7_time:
+    if not l7_time or not src_port:
         return None
     
-    candidates = flow_index.get((src_ip, src_port), [])
+    # Look up by src_port only
+    candidates = flow_index.get(src_port, [])
     
     best_match = None
     min_diff = float('inf')
@@ -130,8 +177,8 @@ def find_matching_flow(l7_log: dict, flow_index: dict, time_tolerance_ms: int = 
     return best_match
 
 
-def label_traffic(src_ip: str, attacker_ip: str, normal_ip: str) -> str:
-    """Label traffic based on source IP."""
+def label_traffic(src_ip: str, attacker_ip: str, normal_ip: str) -> tuple:
+    """Label traffic based on source IP. Returns (label, attacker_source)."""
     src_ip = extract_ip(src_ip)
     
     # Handle comma-separated IPs
@@ -139,11 +186,12 @@ def label_traffic(src_ip: str, attacker_ip: str, normal_ip: str) -> str:
     normal_ips = [ip.strip() for ip in normal_ip.split(',') if ip.strip()]
     
     if src_ip in attacker_ips:
-        return 'attack'
+        # Return attacker source for identification
+        return ('attack', src_ip)
     elif src_ip in normal_ips:
-        return 'normal'
+        return ('normal', '')
     else:
-        return 'unknown'
+        return ('unknown', src_ip)
 
 
 def port_to_service(port: int) -> str:
@@ -234,8 +282,14 @@ def merge_logs(l7_logs: list, l3l4_logs: list, attacker_ip: str, normal_ip: str)
             'num_failed_logins': num_failed_logins,  # NSL-KDD: num_failed_logins
             
             # Label
-            'label': label_traffic(src_ip, attacker_ip, normal_ip)
+            'label': '',
+            'attacker_source': ''
         }
+        
+        # Get label and attacker source
+        label, attacker_source = label_traffic(src_ip, attacker_ip, normal_ip)
+        record['label'] = label
+        record['attacker_source'] = attacker_source
         
         merged.append(record)
     
@@ -270,12 +324,23 @@ def main():
                         help='Attacker IP(s), comma-separated')
     parser.add_argument('--normal-ip', type=str, default=os.getenv('NORMAL_IP', ''), 
                         help='Normal traffic IP(s), comma-separated')
+    parser.add_argument('--after', type=str, default='',
+                        help='Filter logs after this timestamp (ISO format, e.g., 2025-12-11T10:46:22Z)')
     
     args = parser.parse_args()
     
     logs_dir = Path(args.logs_dir)
     csv_dir = Path(args.csv_dir)
     output_path = Path(args.output)
+    
+    # Parse --after timestamp
+    after_time = None
+    if args.after:
+        after_time = parse_timestamp(args.after)
+        if after_time:
+            print(f"Filtering logs after: {args.after}")
+        else:
+            print(f"Warning: Could not parse --after timestamp: {args.after}")
     
     print(f"L7 Logs Dir: {logs_dir}")
     print(f"L3/4 CSV Dir: {csv_dir}")
@@ -285,7 +350,7 @@ def main():
     print()
     
     # Load logs
-    l7_logs = load_l7_logs(logs_dir)
+    l7_logs = load_l7_logs(logs_dir, after_time=after_time)
     l3l4_logs = load_l3l4_logs(csv_dir)
     
     # Merge and label

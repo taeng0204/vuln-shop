@@ -16,9 +16,9 @@ DURATION = int(os.getenv("DURATION", 3600))
 # Maximum number of concurrent users to simulate
 MAX_USERS = int(os.getenv("MAX_USERS", 50))
 
-# Delay ranges (in seconds) - simulates human reading/thinking time
-MIN_DELAY = 1
-MAX_DELAY = 5
+# Delay ranges (in seconds) - moderate delay for reduced traffic
+MIN_DELAY = 0.1
+MAX_DELAY = 1.0
 
 # === Persona Configuration ===
 # Different user types with varying behavior patterns

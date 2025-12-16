@@ -65,8 +65,8 @@ def main():
             t.start()
             active_threads.append(t)
             
-            # Random delay between spawning users
-            time.sleep(random.uniform(0.5, 2.0))
+            # Random delay between spawning users (minimal for maximum throughput)
+            time.sleep(random.uniform(0.02, 0.1))
         else:
             time.sleep(1)
 

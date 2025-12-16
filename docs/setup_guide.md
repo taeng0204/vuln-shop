@@ -47,9 +47,21 @@ curl http://localhost:3000/
 
 ## 2단계: 정상 트래픽 생성 (노트북 - 터미널 2)
 
+> [!NOTE]
+> 적절한 양의 정상 트래픽을 생성하기 위한 설정입니다.
+> - 동시 사용자: 50명 (기본값)
+> - 딜레이: 0.1~1.0초 (적절한 요청 간격)
+> - 페르소나별 다양한 행동 패턴 적용
+
 ```bash
 cd traffic-generator
-SIMULATED_IP=192.168.0.200 DURATION=1800 MAX_USERS=5 uv run main.py
+SIMULATED_IP=192.168.0.200 DURATION=1800 uv run main.py
+```
+
+**옵션 조정 (필요시):**
+```bash
+# 트래픽 양 조절
+MAX_USERS=100 SIMULATED_IP=192.168.0.200 DURATION=1800 uv run main.py
 ```
 
 ---
